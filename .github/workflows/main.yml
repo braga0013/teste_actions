@@ -1,0 +1,17 @@
+name: Documentar e enviar para Asana
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  document:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Confirmar disparo
+        run: echo "Push na main detectado. Pipeline iniciado."
