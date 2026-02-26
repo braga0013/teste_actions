@@ -29,3 +29,35 @@ jobs:
         with:
           name: arquivos-alterados
           path: files_changed.txt
+      
+      - name: Gerar documentação em Markdown
+        run: |
+          if [ ! -s files_changed.txt ]; then
+            echo "Nenhum arquivo relevante alterado. Pulando documentação."
+            exit 0
+          fi
+
+          mkdir -p docs
+          DATA=$(date +'%Y-%m-%d_%H-%M')
+
+          DOC="docs/update-$DATA.md"
+
+          echo "# Atualização de Código" > $DOC
+          echo "" >> $DOC
+          echo "- Data: $(date)" >> $DOC
+          echo "- Commit: $GITHUB_SHA" >> $DOC
+          echo "" >> $DOC
+          echo "## Arquivos alterados" >> $DOC
+          echo "" >> $DOC
+
+          while read file; do
+            echo "### $file" >> $DOC
+            echo '```diff' >> $DOC
+            git diff HEAD~1 HEAD -- $file >> $DOC || true
+            echo '```' >> $DOC
+            echo "" >> $DOC
+          done < files_changed.txt
+
+          echo "_Gerado automaticamente via GitHub Actions_" >> $DOC
+
+          cat $DOC
