@@ -33,13 +33,12 @@ jobs:
       - name: Gerar documentação em Markdown
         run: |
           if [ ! -s files_changed.txt ]; then
-            echo "Nenhum arquivo relevante alterado. Pulando documentação."
+            echo "Nenhum arquivo relevante alterado. Documentação não gerada."
             exit 0
           fi
 
           mkdir -p docs
           DATA=$(date +'%Y-%m-%d_%H-%M')
-
           DOC="docs/update-$DATA.md"
 
           echo "# Atualização de Código" > $DOC
@@ -53,11 +52,9 @@ jobs:
           while read file; do
             echo "### $file" >> $DOC
             echo '```diff' >> $DOC
-            git diff HEAD~1 HEAD -- $file >> $DOC || true
+            git diff HEAD~1 HEAD -- "$file" || true >> $DOC
             echo '```' >> $DOC
             echo "" >> $DOC
           done < files_changed.txt
 
           echo "_Gerado automaticamente via GitHub Actions_" >> $DOC
-
-          cat $DOC
