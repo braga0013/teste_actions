@@ -55,25 +55,42 @@ def generate_markdown(file, diff):
 
     prompt = f"""
 Você é um engenheiro de software sênior fazendo code review completo.
-Gere documentação técnica usando as marcações abaixo. NÃO use Markdown.
+Gere documentação técnica usando EXATAMENTE as marcações abaixo.
 
 REGRAS DE ESCRITA:
 - Seja direto, sem introduções genéricas ou floreios
 - Explique o propósito geral antes dos detalhes
 - Considere que o leitor é técnico (dev/infra/QA)
 - Não repita o código inteiro
-- Use exemplos curtos quando necessário
 - Analise o CODIGO COMPLETO, não apenas o diff
 - O diff serve apenas para indicar o que foi alterado neste commit
 
-REGRAS DE FORMATAÇÃO (OBRIGATÓRIO):
-- NÃO use #, ##, **, *, `, --- ou qualquer símbolo Markdown
-- Títulos de seção em MAIÚSCULAS entre linhas de ====================
-- Use ">" no início de cada item de lista
-- Para exemplos de código ou trechos relevantes use [CODE] e [/CODE]
+REGRAS DE FORMATAÇÃO (SIGA EXATAMENTE):
+- NÃO use #, ##, **, *, ` ou qualquer símbolo Markdown
+- Títulos: MAIÚSCULAS entre duas linhas exatas de ====================
+- Listas: cada item começa com "> " (sinal de maior + espaço)
+- Blocos de código: OBRIGATÓRIO usar [CODE] na linha antes e [/CODE] na linha depois
 - Separe seções com uma linha em branco
+- NUNCA escreva entidades HTML como &lt; &gt; &amp; — escreva os caracteres diretamente
 
-ESTRUTURA EXATA:
+QUANDO USAR [CODE]:
+- Exemplos de chamada de função
+- Trechos de SQL relevantes
+- Exemplos de entrada/saída
+- Qualquer trecho de código que ajude a entender
+
+EXEMPLO DE BLOCO DE CODIGO:
+[CODE]
+SELECT IDPRODUTO, VALPRECO
+FROM DBA.PRODUTO
+WHERE IDPRODUTO = :ID
+[/CODE]
+
+EXEMPLO DE LISTA:
+> item um
+> item dois
+
+ESTRUTURA EXATA A SEGUIR:
 
 ====================
 ARQUIVO
@@ -93,19 +110,24 @@ Explicação direta do propósito geral do arquivo/funcionalidade.
 ====================
 ENTRADA ESPERADA
 ====================
-> Parâmetros, tipos, estrutura e exemplos reais do que o código recebe
+> Parâmetros, tipos e exemplos reais
+[CODE]
+exemplo de entrada se aplicável
+[/CODE]
 
 ====================
 SAIDA GERADA
 ====================
-> O que o código produz ou retorna, com exemplos se possível
+> O que retorna
+[CODE]
+exemplo de saída se aplicável
+[/CODE]
 
 ====================
 FLUXO DE EXECUCAO
 ====================
 > Passo 1
 > Passo 2
-> Passo 3
 
 ====================
 FUNCOES E METODOS PRINCIPAIS
@@ -115,39 +137,28 @@ FUNCOES E METODOS PRINCIPAIS
 ====================
 QUERIES E LOGICA DE DADOS
 ====================
-> Descreva as queries SQL ou lógica de dados presente no código
-> CTEs utilizadas e seus papéis
-> Joins e filtros relevantes
-> Pontos de atenção nas queries
-Se houver query relevante, use [CODE]...[/CODE] para mostrar trecho
+> Descreva cada query ou lógica relevante
+[CODE]
+trecho da query principal aqui
+[/CODE]
 
 ====================
 REGRAS DE NEGOCIO
 ====================
-> Regras implícitas identificadas no código completo
+> Regras implícitas identificadas
 
 ====================
 DECISOES ARQUITETURAIS
 ====================
-> Decisões relevantes observadas no código
-
-====================
-PONTOS CRITICOS E DEPENDENCIAS
-====================
-> Dependências externas, riscos ou pontos de atenção
-
-====================
-SUGESTOES DE MELHORIA
-====================
-> Melhorias técnicas identificadas na análise do código completo
+> Decisões relevantes
 
 Arquivo: {file}
 
-CODIGO COMPLETO DO ARQUIVO:
+CODIGO COMPLETO:
 {content}
 
-DIFF DO COMMIT (o que mudou agora):
-{diff if diff else "Nenhuma alteração no diff (arquivo novo ou sem diff disponível)"}
+DIFF DO COMMIT:
+{diff if diff else "Sem diff disponível"}
 """
 
     response = requests.post(
