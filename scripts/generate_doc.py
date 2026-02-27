@@ -132,6 +132,11 @@ def create_asana_task(title, markdown):
     url = "https://app.asana.com/api/1.0/tasks"
     html_notes = markdown_to_asana_html(markdown)
 
+    # DEBUG: mostra o HTML gerado antes de enviar
+    print("=== HTML ENVIADO AO ASANA ===")
+    print(html_notes[:2000])
+    print("=== FIM HTML ===")
+
     payload = {
         "data": {
             "name": title,
@@ -144,6 +149,13 @@ def create_asana_task(title, markdown):
         "Content-Type": "application/json",
     }
     r = requests.post(url, json=payload, headers=headers, timeout=20)
+
+    # DEBUG: mostra resposta completa do Asana
+    print("=== RESPOSTA ASANA ===")
+    print(r.status_code)
+    print(r.text)
+    print("=== FIM RESPOSTA ===")
+
     r.raise_for_status()
 
 
