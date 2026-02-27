@@ -232,6 +232,11 @@ def create_asana_task(title, text):
     url = "https://app.asana.com/api/1.0/tasks"
     html_notes = text_to_asana_html(text)
 
+    # DEBUG COMPLETO
+    print("=== HTML COMPLETO ENVIADO ===")
+    print(f"<body>{html_notes}</body>")
+    print("=== FIM ===")
+
     payload = {
         "data": {
             "name": title,
