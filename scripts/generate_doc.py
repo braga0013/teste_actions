@@ -79,6 +79,18 @@ Diff:
     return response.json()["choices"][0]["message"]["content"]
 
 
+def escape_html(text: str) -> str:
+    return (
+        text
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
+        .replace("`", "&#96;")
+    )
+
+
 def markdown_to_asana_html(markdown: str) -> str:
     lines = markdown.split("\n")
     html_lines = []
@@ -86,14 +98,13 @@ def markdown_to_asana_html(markdown: str) -> str:
     code_buffer = []
 
     for line in lines:
-        # Bloco de código → vira parágrafo com texto puro (Asana não aceita <pre>/<code>)
         if line.strip().startswith("```"):
             if not in_code_block:
                 in_code_block = True
                 code_buffer = []
             else:
                 in_code_block = False
-                code_content = " | ".join(code_buffer)
+                code_content = escape_html(" | ".join(code_buffer))
                 html_lines.append(f"<p>{code_content}</p>")
             continue
 
@@ -101,28 +112,24 @@ def markdown_to_asana_html(markdown: str) -> str:
             code_buffer.append(line)
             continue
 
-        # Títulos → viram <strong> em parágrafo
         if line.startswith("### "):
-            html_lines.append(f"<p><strong>{line[4:]}</strong></p>")
+            html_lines.append(f"<p><strong>{escape_html(line[4:])}</strong></p>")
         elif line.startswith("## "):
-            html_lines.append(f"<p><strong>{line[3:]}</strong></p>")
+            html_lines.append(f"<p><strong>{escape_html(line[3:])}</strong></p>")
         elif line.startswith("# "):
-            html_lines.append(f"<p><strong>{line[2:]}</strong></p>")
+            html_lines.append(f"<p><strong>{escape_html(line[2:])}</strong></p>")
 
-        # Listas
         elif line.startswith("- ") or line.startswith("* "):
-            content = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", line[2:])
-            content = re.sub(r"`(.+?)`", r"\1", content)  # inline code: remove backticks
+            content = escape_html(line[2:])
+            content = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", content)
             html_lines.append(f"<ul><li>{content}</li></ul>")
 
-        # Linha vazia
         elif line.strip() == "":
             continue
 
-        # Parágrafo normal
         else:
-            formatted = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", line)
-            formatted = re.sub(r"`(.+?)`", r"\1", formatted)  # inline code: remove backticks
+            formatted = escape_html(line)
+            formatted = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", formatted)
             html_lines.append(f"<p>{formatted}</p>")
 
     return "\n".join(html_lines)
