@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import requests
 from datetime import datetime
@@ -43,26 +44,19 @@ def generate_markdown(file, diff):
         return f"# {file}\n\nNenhuma alteração relevante."
 
     prompt = f"""
-Você vai gerar documentação para ser colada DIRETAMENTE no Asana.
+Você é um engenheiro de software sênior.
+Gere documentação técnica clara e objetiva em Markdown.
 
-REGRAS DE FORMATAÇÃO (OBRIGATÓRIO):
-- NÃO use Markdown avançado
-- NÃO use ```diff
-- Use apenas:
-  - Títulos simples (texto em negrito)
-  - Listas com hífen (-)
-  - Código em bloco simples (``` sem linguagem)
-  - Código inline com `
+Explique:
+- O que mudou
+- Impacto técnico
 
-ESTRUTURA EXATA:
-- Título em negrito
-- Seção "O que mudou"
-- Seção "Impacto técnico"
-- Seção "Observações" (se houver)
+Arquivo: {file}
 
-Arquivo analisado: {file}
-
-Código alterado:
+Diff:
+```diff
+{diff}
+```
 """
 
     response = requests.post(
@@ -85,12 +79,53 @@ Código alterado:
     return response.json()["choices"][0]["message"]["content"]
 
 
+def markdown_to_asana_html(markdown: str) -> str:
+    lines = markdown.split("\n")
+    html_lines = []
+    in_code_block = False
+    code_buffer = []
+
+    for line in lines:
+        if line.strip().startswith("```"):
+            if not in_code_block:
+                in_code_block = True
+                code_buffer = []
+            else:
+                in_code_block = False
+                code_content = "\n".join(code_buffer)
+                html_lines.append(f"<pre><code>{code_content}</code></pre>")
+            continue
+
+        if in_code_block:
+            code_buffer.append(line)
+            continue
+
+        if line.startswith("### "):
+            html_lines.append(f"<h3>{line[4:]}</h3>")
+        elif line.startswith("## "):
+            html_lines.append(f"<h2>{line[3:]}</h2>")
+        elif line.startswith("# "):
+            html_lines.append(f"<h1>{line[2:]}</h1>")
+        elif line.startswith("- ") or line.startswith("* "):
+            html_lines.append(f"<ul><li>{line[2:]}</li></ul>")
+        elif line.strip() == "":
+            html_lines.append("<br/>")
+        else:
+            formatted = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", line)
+            formatted = re.sub(r"`(.+?)`", r"<code>\1</code>", formatted)
+            html_lines.append(f"<p>{formatted}</p>")
+
+    return "\n".join(html_lines)
+
+
 def create_asana_task(title, markdown):
     url = "https://app.asana.com/api/1.0/tasks"
+    html_notes = markdown_to_asana_html(markdown)
+
     payload = {
         "data": {
             "name": title,
-            "notes": markdown,
+            "html_notes": f"<body>{html_notes}</body>",
             "projects": [ASANA_PROJECT_ID],
         }
     }
@@ -121,4 +156,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
