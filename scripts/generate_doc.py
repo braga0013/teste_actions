@@ -39,12 +39,22 @@ def get_diff_for_file(file):
         return ""
 
 
+def get_file_content(file):
+    try:
+        with open(file, "r", encoding="utf-8", errors="ignore") as f:
+            return f.read()
+    except Exception:
+        return ""
+
+
 def generate_markdown(file, diff):
-    if not diff:
-        return f"# {file}\n\nNenhuma alteração relevante."
+    content = get_file_content(file)
+
+    if not content:
+        return f"{file}\n\nArquivo não encontrado ou vazio."
 
     prompt = f"""
-Você é um engenheiro de software sênior.
+Você é um engenheiro de software sênior fazendo code review completo.
 Gere documentação técnica em texto puro (sem Markdown, sem símbolos de formatação).
 
 REGRAS DE ESCRITA:
@@ -53,6 +63,8 @@ REGRAS DE ESCRITA:
 - Considere que o leitor é técnico (dev/infra/QA)
 - Não repita o código inteiro
 - Use exemplos curtos quando necessário
+- Analise o CODIGO COMPLETO, não apenas o diff
+- O diff serve apenas para indicar o que foi alterado neste commit
 
 REGRAS DE FORMATAÇÃO (OBRIGATÓRIO):
 - NÃO use #, ##, **, *, `, --- ou qualquer símbolo Markdown
@@ -68,58 +80,72 @@ ARQUIVO
 nome do arquivo
 
 ====================
-O QUE MUDOU
+O QUE MUDOU NESTE COMMIT
 ====================
-> item 1
-> item 2
+> item 1 (baseado no diff)
 
 ====================
-OBJETIVO
+OBJETIVO DO CODIGO
 ====================
-Explicação direta do propósito geral da alteração.
+Explicação direta do propósito geral do arquivo/funcionalidade.
 
 ====================
 ENTRADA ESPERADA
 ====================
-> Estrutura, tipos e exemplos do que o código recebe
+> Parâmetros, tipos, estrutura e exemplos reais do que o código recebe
 
 ====================
-SAÍDA GERADA
+SAIDA GERADA
 ====================
-> O que o código produz ou retorna
+> O que o código produz ou retorna, com exemplos se possível
 
 ====================
-FLUXO DE EXECUÇÃO
+FLUXO DE EXECUCAO
 ====================
 > Passo 1
 > Passo 2
 > Passo 3
 
 ====================
-FUNÇÕES PRINCIPAIS
+FUNCOES E METODOS PRINCIPAIS
 ====================
-> nome_da_funcao: responsabilidade
+> nome_da_funcao: responsabilidade detalhada
 
 ====================
-REGRAS DE NEGÓCIO
+QUERIES E LOGICA DE DADOS
 ====================
-> Regras implícitas identificadas no diff
+> Descreva as queries SQL ou lógica de dados presente no código
+> CTEs utilizadas e seus papéis
+> Joins e filtros relevantes
+> Pontos de atenção nas queries
 
 ====================
-DECISÕES ARQUITETURAIS
+REGRAS DE NEGOCIO
 ====================
-> Decisões relevantes observadas
+> Regras implícitas identificadas no código completo
 
 ====================
-PONTOS CRÍTICOS E DEPENDÊNCIAS
+DECISOES ARQUITETURAIS
+====================
+> Decisões relevantes observadas no código
+
+====================
+PONTOS CRITICOS E DEPENDENCIAS
 ====================
 > Dependências externas, riscos ou pontos de atenção
 
-Arquivo analisado: {file}
+====================
+SUGESTOES DE MELHORIA
+====================
+> Melhorias técnicas identificadas na análise do código completo
 
-Diff:
-{diff}
-```
+Arquivo: {file}
+
+CODIGO COMPLETO DO ARQUIVO:
+{content}
+
+DIFF DO COMMIT (o que mudou agora):
+{diff if diff else "Nenhuma alteração no diff (arquivo novo ou sem diff disponível)"}
 """
 
     response = requests.post(
@@ -131,12 +157,12 @@ Diff:
         json={
             "model": "gpt-4.1-mini",
             "messages": [
-                {"role": "system", "content": "Você gera documentação técnica profissional."},
+                {"role": "system", "content": "Você faz code review completo e gera documentação técnica profissional em texto puro, sem qualquer símbolo Markdown."},
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.2,
         },
-        timeout=30,
+        timeout=60,
     )
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
