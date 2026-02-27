@@ -79,75 +79,38 @@ Diff:
     return response.json()["choices"][0]["message"]["content"]
 
 
-def escape_html(text: str) -> str:
-    return (
-        text
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-        .replace("'", "&#39;")
-        .replace("`", "&#96;")
-    )
-
-
-def markdown_to_asana_html(markdown: str) -> str:
+def markdown_to_plain(markdown: str) -> str:
     lines = markdown.split("\n")
-    html_lines = []
+    plain_lines = []
     in_code_block = False
-    code_buffer = []
 
     for line in lines:
         if line.strip().startswith("```"):
-            if not in_code_block:
-                in_code_block = True
-                code_buffer = []
-            else:
-                in_code_block = False
-                code_content = escape_html(" | ".join(code_buffer))
-                html_lines.append(f"<p>{code_content}</p>")
+            in_code_block = not in_code_block
             continue
 
         if in_code_block:
-            code_buffer.append(line)
+            plain_lines.append(f"  {line}")
             continue
 
-        if line.startswith("### "):
-            html_lines.append(f"<p><strong>{escape_html(line[4:])}</strong></p>")
-        elif line.startswith("## "):
-            html_lines.append(f"<p><strong>{escape_html(line[3:])}</strong></p>")
-        elif line.startswith("# "):
-            html_lines.append(f"<p><strong>{escape_html(line[2:])}</strong></p>")
+        line = re.sub(r"^#{1,6}\s+", "", line)
+        line = re.sub(r"\*\*(.+?)\*\*", r"\1", line)
+        line = re.sub(r"\*(.+?)\*", r"\1", line)
+        line = re.sub(r"`(.+?)`", r"\1", line)
 
-        elif line.startswith("- ") or line.startswith("* "):
-            content = escape_html(line[2:])
-            content = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", content)
-            html_lines.append(f"<ul><li>{content}</li></ul>")
+        plain_lines.append(line)
 
-        elif line.strip() == "":
-            continue
-
-        else:
-            formatted = escape_html(line)
-            formatted = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", formatted)
-            html_lines.append(f"<p>{formatted}</p>")
-
-    return "\n".join(html_lines)
+    return "\n".join(plain_lines)
 
 
 def create_asana_task(title, markdown):
     url = "https://app.asana.com/api/1.0/tasks"
-    html_notes = markdown_to_asana_html(markdown)
-
-    # DEBUG: mostra o HTML gerado antes de enviar
-    print("=== HTML ENVIADO AO ASANA ===")
-    print(html_notes[:2000])
-    print("=== FIM HTML ===")
+    notes = markdown_to_plain(markdown)
 
     payload = {
         "data": {
             "name": title,
-            "html_notes": f"<body>{html_notes}</body>",
+            "notes": notes,
             "projects": [ASANA_PROJECT_ID],
         }
     }
@@ -156,13 +119,6 @@ def create_asana_task(title, markdown):
         "Content-Type": "application/json",
     }
     r = requests.post(url, json=payload, headers=headers, timeout=20)
-
-    # DEBUG: mostra resposta completa do Asana
-    print("=== RESPOSTA ASANA ===")
-    print(r.status_code)
-    print(r.text)
-    print("=== FIM RESPOSTA ===")
-
     r.raise_for_status()
 
 
