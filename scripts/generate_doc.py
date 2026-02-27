@@ -86,33 +86,43 @@ def markdown_to_asana_html(markdown: str) -> str:
     code_buffer = []
 
     for line in lines:
+        # Bloco de código → vira parágrafo com texto puro (Asana não aceita <pre>/<code>)
         if line.strip().startswith("```"):
             if not in_code_block:
                 in_code_block = True
                 code_buffer = []
             else:
                 in_code_block = False
-                code_content = "\n".join(code_buffer)
-                html_lines.append(f"<pre><code>{code_content}</code></pre>")
+                code_content = " | ".join(code_buffer)
+                html_lines.append(f"<p>{code_content}</p>")
             continue
 
         if in_code_block:
             code_buffer.append(line)
             continue
 
+        # Títulos → viram <strong> em parágrafo
         if line.startswith("### "):
-            html_lines.append(f"<h3>{line[4:]}</h3>")
+            html_lines.append(f"<p><strong>{line[4:]}</strong></p>")
         elif line.startswith("## "):
-            html_lines.append(f"<h2>{line[3:]}</h2>")
+            html_lines.append(f"<p><strong>{line[3:]}</strong></p>")
         elif line.startswith("# "):
-            html_lines.append(f"<h1>{line[2:]}</h1>")
+            html_lines.append(f"<p><strong>{line[2:]}</strong></p>")
+
+        # Listas
         elif line.startswith("- ") or line.startswith("* "):
-            html_lines.append(f"<ul><li>{line[2:]}</li></ul>")
+            content = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", line[2:])
+            content = re.sub(r"`(.+?)`", r"\1", content)  # inline code: remove backticks
+            html_lines.append(f"<ul><li>{content}</li></ul>")
+
+        # Linha vazia
         elif line.strip() == "":
-            html_lines.append("<br/>")
+            continue
+
+        # Parágrafo normal
         else:
             formatted = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", line)
-            formatted = re.sub(r"`(.+?)`", r"<code>\1</code>", formatted)
+            formatted = re.sub(r"`(.+?)`", r"\1", formatted)  # inline code: remove backticks
             html_lines.append(f"<p>{formatted}</p>")
 
     return "\n".join(html_lines)
