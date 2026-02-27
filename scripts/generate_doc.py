@@ -4,54 +4,55 @@ import requests
 from datetime import datetime
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ASANA_TOKEN = os.getenv("ASANA_TOKEN")
+ASANA_PROJECT_ID = os.getenv("ASANA_PROJECT_ID")
 
 if not OPENAI_API_KEY:
-    raise RuntimeError("OPENAI_API_KEY não definida no ambiente")
+    raise RuntimeError("OPENAI_API_KEY não definida")
+
+if not ASANA_TOKEN or not ASANA_PROJECT_ID:
+    raise RuntimeError("ASANA_TOKEN ou ASANA_PROJECT_ID não definidos")
 
 
-def get_git_diff() -> str:
-    """
-    Retorna o diff entre o último commit e o anterior.
-    Funciona tanto em merge quanto em push direto.
-    """
+def get_changed_files():
     try:
-        diff = subprocess.check_output(
-            ["git", "diff", "HEAD~1", "HEAD"],
-            stderr=subprocess.DEVNULL,
+        files = subprocess.check_output(
+            ["git", "diff", "HEAD~1", "HEAD", "--name-only"],
             text=True
         )
     except Exception:
-        try:
-            diff = subprocess.check_output(
-                ["git", "show", "--pretty=", "HEAD"],
-                stderr=subprocess.DEVNULL,
-                text=True
-            )
-        except Exception:
-            diff = ""
-
-    return diff.strip()
-
-
-def generate_markdown(diff: str) -> str:
-    if not diff:
-        return (
-            "# Atualização de Código\n\n"
-            "Nenhuma alteração relevante detectada.\n"
+        files = subprocess.check_output(
+            ["git", "show", "--pretty=", "--name-only", "HEAD"],
+            text=True
         )
+    return [f for f in files.splitlines() if f and not f.startswith(".github/")]
+
+
+def get_diff_for_file(file):
+    try:
+        return subprocess.check_output(
+            ["git", "diff", "HEAD~1", "HEAD", "--", file],
+            text=True
+        )
+    except Exception:
+        return ""
+
+
+def generate_markdown(file, diff):
+    if not diff:
+        return f"# {file}\n\nNenhuma alteração relevante."
 
     prompt = f"""
 Você é um engenheiro de software sênior.
-Gere uma documentação técnica clara e objetiva em **Markdown**.
+Gere documentação técnica clara e objetiva em Markdown.
 
-Regras:
-- Explique o que mudou
-- Explique impacto técnico
-- Use títulos e listas
-- NÃO repita o diff literalmente
-- NÃO invente informações
+Explique:
+- O que mudou
+- Impacto técnico
 
-Diff analisado:
+Arquivo: {file}
+
+Diff:
 ```diff
 {diff}
 ```
@@ -66,41 +67,52 @@ Diff analisado:
         json={
             "model": "gpt-4.1-mini",
             "messages": [
-                {
-                    "role": "system",
-                    "content": "Você gera documentação técnica profissional em Markdown."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
+                {"role": "system", "content": "Você gera documentação técnica profissional."},
+                {"role": "user", "content": prompt},
             ],
-            "temperature": 0.2
+            "temperature": 0.2,
         },
         timeout=30,
     )
-
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
 
 
-def save_doc(markdown: str) -> str:
-    os.makedirs("docs", exist_ok=True)
-    timestamp = datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S")
-    path = f"docs/update-ai-{timestamp}.md"
-
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(markdown)
-
-    return path
+def create_asana_task(title, markdown):
+    url = "https://app.asana.com/api/1.0/tasks"
+    payload = {
+        "data": {
+            "name": title,
+            "notes": markdown,
+            "projects": [ASANA_PROJECT_ID],
+        }
+    }
+    headers = {
+        "Authorization": f"Bearer {ASANA_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    r = requests.post(url, json=payload, headers=headers, timeout=20)
+    r.raise_for_status()
 
 
 def main():
-    diff = get_git_diff()
-    markdown = generate_markdown(diff)
-    path = save_doc(markdown)
-    print(f"Documentação gerada com sucesso: {path}")
+    files = get_changed_files()
+
+    if not files:
+        print("Nenhum arquivo relevante alterado.")
+        return
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    for file in files:
+        diff = get_diff_for_file(file)
+        markdown = generate_markdown(file, diff)
+        title = f"[DOC] {file} – {now}"
+        create_asana_task(title, markdown)
+        print(f"Tarefa criada no Asana para {file}")
 
 
 if __name__ == "__main__":
     main()
+
+    
