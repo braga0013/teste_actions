@@ -45,16 +45,79 @@ def generate_markdown(file, diff):
 
     prompt = f"""
 Você é um engenheiro de software sênior.
-Gere documentação técnica clara e objetiva em Markdown.
+Gere documentação técnica em texto puro (sem Markdown, sem símbolos de formatação).
 
-Explique:
-- O que mudou
-- Impacto técnico
+REGRAS DE ESCRITA:
+- Seja direto, sem introduções genéricas ou floreios
+- Explique o propósito geral antes dos detalhes
+- Considere que o leitor é técnico (dev/infra/QA)
+- Não repita o código inteiro
+- Use exemplos curtos quando necessário
 
-Arquivo: {file}
+REGRAS DE FORMATAÇÃO (OBRIGATÓRIO):
+- NÃO use #, ##, **, *, `, --- ou qualquer símbolo Markdown
+- Títulos de seção em MAIÚSCULAS entre linhas de ====================
+- Use ">" no início de cada item de lista
+- Separe seções com uma linha em branco
+
+ESTRUTURA EXATA:
+
+====================
+ARQUIVO
+====================
+nome do arquivo
+
+====================
+O QUE MUDOU
+====================
+> item 1
+> item 2
+
+====================
+OBJETIVO
+====================
+Explicação direta do propósito geral da alteração.
+
+====================
+ENTRADA ESPERADA
+====================
+> Estrutura, tipos e exemplos do que o código recebe
+
+====================
+SAÍDA GERADA
+====================
+> O que o código produz ou retorna
+
+====================
+FLUXO DE EXECUÇÃO
+====================
+> Passo 1
+> Passo 2
+> Passo 3
+
+====================
+FUNÇÕES PRINCIPAIS
+====================
+> nome_da_funcao: responsabilidade
+
+====================
+REGRAS DE NEGÓCIO
+====================
+> Regras implícitas identificadas no diff
+
+====================
+DECISÕES ARQUITETURAIS
+====================
+> Decisões relevantes observadas
+
+====================
+PONTOS CRÍTICOS E DEPENDÊNCIAS
+====================
+> Dependências externas, riscos ou pontos de atenção
+
+Arquivo analisado: {file}
 
 Diff:
-```diff
 {diff}
 ```
 """
