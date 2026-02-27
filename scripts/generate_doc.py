@@ -55,7 +55,7 @@ def generate_markdown(file, diff):
 
     prompt = f"""
 Você é um engenheiro de software sênior fazendo code review completo.
-Gere documentação técnica em texto puro (sem Markdown, sem símbolos de formatação).
+Gere documentação técnica usando as marcações abaixo. NÃO use Markdown.
 
 REGRAS DE ESCRITA:
 - Seja direto, sem introduções genéricas ou floreios
@@ -70,6 +70,7 @@ REGRAS DE FORMATAÇÃO (OBRIGATÓRIO):
 - NÃO use #, ##, **, *, `, --- ou qualquer símbolo Markdown
 - Títulos de seção em MAIÚSCULAS entre linhas de ====================
 - Use ">" no início de cada item de lista
+- Para exemplos de código ou trechos relevantes use [CODE] e [/CODE]
 - Separe seções com uma linha em branco
 
 ESTRUTURA EXATA:
@@ -118,6 +119,7 @@ QUERIES E LOGICA DE DADOS
 > CTEs utilizadas e seus papéis
 > Joins e filtros relevantes
 > Pontos de atenção nas queries
+Se houver query relevante, use [CODE]...[/CODE] para mostrar trecho
 
 ====================
 REGRAS DE NEGOCIO
@@ -157,7 +159,7 @@ DIFF DO COMMIT (o que mudou agora):
         json={
             "model": "gpt-4.1-mini",
             "messages": [
-                {"role": "system", "content": "Você faz code review completo e gera documentação técnica profissional em texto puro, sem qualquer símbolo Markdown."},
+                {"role": "system", "content": "Você faz code review completo e gera documentação técnica profissional. Use apenas as marcações definidas no prompt, sem Markdown."},
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.2,
@@ -168,38 +170,72 @@ DIFF DO COMMIT (o que mudou agora):
     return response.json()["choices"][0]["message"]["content"]
 
 
-def markdown_to_plain(markdown: str) -> str:
-    lines = markdown.split("\n")
-    plain_lines = []
-    in_code_block = False
+def xml_escape(text: str) -> str:
+    return (
+        text
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
+    )
 
-    for line in lines:
-        if line.strip().startswith("```"):
-            in_code_block = not in_code_block
+
+def text_to_asana_html(text: str) -> str:
+    lines = text.split("\n")
+    html_parts = []
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+
+        # Bloco [CODE]...[/CODE] → <pre> (elemento direto do body, sem nesting)
+        if line.strip() == "[CODE]":
+            code_lines = []
+            i += 1
+            while i < len(lines) and lines[i].strip() != "[/CODE]":
+                code_lines.append(xml_escape(lines[i]))
+                i += 1
+            html_parts.append("<pre>" + "\n".join(code_lines) + "</pre>")
+            i += 1
             continue
 
-        if in_code_block:
-            plain_lines.append(f"  {line}")
+        # Título com separador ====================
+        if line.strip().startswith("===================="):
+            if i + 1 < len(lines):
+                title = lines[i + 1].strip()
+                if i + 2 < len(lines) and lines[i + 2].strip().startswith("===================="):
+                    html_parts.append(f"<h2>{xml_escape(title)}</h2>")
+                    i += 3
+                    continue
+
+        # Item de lista > item
+        if line.startswith("> "):
+            content = xml_escape(line[2:].strip())
+            html_parts.append(f"<ul><li>{content}</li></ul>")
+            i += 1
             continue
 
-        line = re.sub(r"^#{1,6}\s+", "", line)
-        line = re.sub(r"\*\*(.+?)\*\*", r"\1", line)
-        line = re.sub(r"\*(.+?)\*", r"\1", line)
-        line = re.sub(r"`(.+?)`", r"\1", line)
+        # Linha vazia
+        if line.strip() == "":
+            i += 1
+            continue
 
-        plain_lines.append(line)
+        # Parágrafo normal
+        html_parts.append(f"<p>{xml_escape(line)}</p>")
+        i += 1
 
-    return "\n".join(plain_lines)
+    return "\n".join(html_parts)
 
 
-def create_asana_task(title, markdown):
+def create_asana_task(title, text):
     url = "https://app.asana.com/api/1.0/tasks"
-    notes = markdown_to_plain(markdown)
+    html_notes = text_to_asana_html(text)
 
     payload = {
         "data": {
             "name": title,
-            "notes": notes,
+            "html_notes": f"<body>{html_notes}</body>",
             "projects": [ASANA_PROJECT_ID],
         }
     }
@@ -208,6 +244,10 @@ def create_asana_task(title, markdown):
         "Content-Type": "application/json",
     }
     r = requests.post(url, json=payload, headers=headers, timeout=20)
+
+    if not r.ok:
+        print("ERRO ASANA:", r.status_code, r.text)
+
     r.raise_for_status()
 
 
@@ -222,9 +262,9 @@ def main():
 
     for file in files:
         diff = get_diff_for_file(file)
-        markdown = generate_markdown(file, diff)
+        text = generate_markdown(file, diff)
         title = f"[DOC] {file} – {now}"
-        create_asana_task(title, markdown)
+        create_asana_task(title, text)
         print(f"Tarefa criada no Asana para {file}")
 
 
