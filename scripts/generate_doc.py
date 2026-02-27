@@ -43,19 +43,26 @@ def generate_markdown(file, diff):
         return f"# {file}\n\nNenhuma alteração relevante."
 
     prompt = f"""
-Você é um engenheiro de software sênior.
-Gere documentação técnica clara e objetiva em Markdown.
+Você vai gerar documentação para ser colada DIRETAMENTE no Asana.
 
-Explique:
-- O que mudou
-- Impacto técnico
+REGRAS DE FORMATAÇÃO (OBRIGATÓRIO):
+- NÃO use Markdown avançado
+- NÃO use ```diff
+- Use apenas:
+  - Títulos simples (texto em negrito)
+  - Listas com hífen (-)
+  - Código em bloco simples (``` sem linguagem)
+  - Código inline com `
 
-Arquivo: {file}
+ESTRUTURA EXATA:
+- Título em negrito
+- Seção "O que mudou"
+- Seção "Impacto técnico"
+- Seção "Observações" (se houver)
 
-Diff:
-```diff
-{diff}
-```
+Arquivo analisado: {file}
+
+Código alterado:
 """
 
     response = requests.post(
@@ -115,4 +122,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-    
