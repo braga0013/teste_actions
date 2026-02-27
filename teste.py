@@ -116,4 +116,5 @@ async def calculo_custo_preco(idproduto:str):
     df = await execute_query("ciss_db2",query=sql, replace_dict={":IDPRODUTO":idproduto}, redis= False)
 
     return await process_results(df, return_with_data=True)
+
     
