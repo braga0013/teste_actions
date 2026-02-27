@@ -15,52 +15,18 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Listar arquivos alterados (robusto e à prova de erro)
-        run: |
-          set +e
-
-          if git rev-parse HEAD~1 >/dev/null 2>&1; then
-            git diff HEAD~1 HEAD --name-only
-          else
-            git show --pretty="" --name-only HEAD
-          fi \
-          | grep -v '^.github/' \
-          > files_changed.txt
-
-          echo "Arquivos relevantes alterados:"
-          cat files_changed.txt || echo "Nenhum arquivo relevante"
-
-      - name: Salvar como artefato (debug)
-        uses: actions/upload-artifact@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          name: arquivos-alterados
-          path: files_changed.txt
-      
-      - name: Gerar documentação em Markdown
+          python-version: '3.11'
+
+      - name: Instalar dependências
         run: |
-          if [ ! -s files_changed.txt ]; then
-            echo "Nenhum arquivo relevante alterado. Documentação não gerada."
-            exit 0
-          fi
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-          mkdir -p docs
-          DATA=$(date +'%Y-%m-%d_%H-%M')
-          DOC="docs/update-$DATA.md"
-
-          echo "# Atualização de Código" > $DOC
-          echo "" >> $DOC
-          echo "- Data: $(date)" >> $DOC
-          echo "- Commit: $GITHUB_SHA" >> $DOC
-          echo "" >> $DOC
-          echo "## Arquivos alterados" >> $DOC
-          echo "" >> $DOC
-
-          while read file; do
-            echo "### $file" >> $DOC
-            echo '```diff' >> $DOC
-            git diff HEAD~1 HEAD -- "$file" || true >> $DOC
-            echo '```' >> $DOC
-            echo "" >> $DOC
-          done < files_changed.txt
-
-          echo "_Gerado automaticamente via GitHub Actions_" >> $DOC
+      - name: Gerar documentação com IA
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python scripts/generate_doc.py
