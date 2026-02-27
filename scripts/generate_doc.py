@@ -171,14 +171,19 @@ DIFF DO COMMIT (o que mudou agora):
 
 
 def xml_escape(text: str) -> str:
-    return (
-        text
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-        .replace("'", "&#39;")
-    )
+    # Primeiro desfaz qualquer entidade já escapada para não duplo-escapar
+    text = text.replace("&amp;", "&")
+    text = text.replace("&lt;", "<")
+    text = text.replace("&gt;", ">")
+    text = text.replace("&quot;", '"')
+    text = text.replace("&#39;", "'")
+    text = text.replace("&#96;", "`")
+    # Agora escapa do zero
+    text = text.replace("&", "&amp;")
+    text = text.replace("<", "&lt;")
+    text = text.replace(">", "&gt;")
+    text = text.replace('"', "&quot;")
+    return text
 
 
 def text_to_asana_html(text: str) -> str:
@@ -189,7 +194,7 @@ def text_to_asana_html(text: str) -> str:
     while i < len(lines):
         line = lines[i]
 
-        # Bloco [CODE]...[/CODE] → <pre> (elemento direto do body, sem nesting)
+        # Bloco [CODE]...[/CODE] → <pre>
         if line.strip() == "[CODE]":
             code_lines = []
             i += 1
@@ -221,8 +226,8 @@ def text_to_asana_html(text: str) -> str:
             i += 1
             continue
 
-        # Parágrafo normal
-        html_parts.append(f"<p>{xml_escape(line)}</p>")
+        # Parágrafo — usa <ul><li> em vez de <p> para evitar rejeição
+        html_parts.append(f"<ul><li>{xml_escape(line)}</li></ul>")
         i += 1
 
     return "\n".join(html_parts)
@@ -231,16 +236,16 @@ def text_to_asana_html(text: str) -> str:
 def create_asana_task(title, text):
     url = "https://app.asana.com/api/1.0/tasks"
     html_notes = text_to_asana_html(text)
+    body = f"<body>{html_notes}</body>"
 
-    # DEBUG COMPLETO
-    print("=== HTML COMPLETO ENVIADO ===")
-    print(f"<body>{html_notes}</body>")
+    print("=== HTML ENVIADO ===")
+    print(body[:3000])
     print("=== FIM ===")
 
     payload = {
         "data": {
             "name": title,
-            "html_notes": f"<body>{html_notes}</body>",
+            "html_notes": body,
             "projects": [ASANA_PROJECT_ID],
         }
     }
