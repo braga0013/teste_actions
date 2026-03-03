@@ -41,6 +41,9 @@ def get_diff_for_file(file):
 
 
 def generate_commented_code(file, content, diff):
+    # Limita conteúdo para evitar timeout em arquivos grandes
+    content_truncated = content[:8000] if len(content) > 8000 else content
+
     prompt = f"""
 Você é um engenheiro de software sênior.
 Sua tarefa é adicionar comentários técnicos diretamente no código fornecido.
@@ -71,7 +74,7 @@ BLOCO DO TOPO (OBRIGATÓRIO):
 Arquivo: {file}
 
 CÓDIGO COMPLETO:
-{content}
+{content_truncated}
 
 DIFF DO COMMIT (o que mudou):
 {diff if diff else "Sem diff disponível"}
@@ -91,12 +94,11 @@ DIFF DO COMMIT (o que mudou):
             ],
             "temperature": 0.2,
         },
-        timeout=60,
+        timeout=120,  # aumentado para 120s
     )
     response.raise_for_status()
     result = response.json()["choices"][0]["message"]["content"]
 
-    # Remove cercas de markdown caso o GPT insista em colocar
     result = result.strip()
     if result.startswith("```"):
         result = "\n".join(result.split("\n")[1:])
