@@ -35,3 +35,5 @@ async def busca_valores_indicador(idindicador: str, dtinicio:str, dtfim:str):
     )
 
     return await process_results(df, return_with_data=True)
+
+    
