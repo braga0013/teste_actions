@@ -7,6 +7,17 @@ from core.logger import log_execution
 
 router = APIRouter()
 
+# Função assíncrona que busca valores de indicador de vendas e comissões
+# Parâmetros:
+#   idindicador (str): Identificador do indicador a ser consultado
+#   dtinicio (str): Data inicial do período de consulta (formato esperado: string)
+#   dtfim (str): Data final do período de consulta (formato esperado: string)
+# Retorna:
+#   Resultado processado da consulta SQL contendo dados de vendas e comissões
+# Regras de negócio:
+#   - Busca dados de vendas e comissões efetivadas dentro do período informado
+#   - Inclui dados do mês anterior com o mesmo período para comparação
+#   - Agrupa os dados por clube para cálculo correto de pontos
 @router.get("/{idindicador}&{dtinicio}&{dtfim}")
 @log_execution
 async def busca_valores_indicador(idindicador: str, dtinicio:str, dtfim:str):
@@ -30,6 +41,8 @@ async def busca_valores_indicador(idindicador: str, dtinicio:str, dtfim:str):
             and c."IDINDICADOR" = ':IDINDICADOR'
 	 '''
 
+    # Executa a consulta SQL no banco "dw_postgres" substituindo os parâmetros na query
+    # cache_ttl define o tempo de cache da consulta para 3 horas (10800 segundos)
     df = await execute_query(
         "dw_postgres", query=sql,replace_dict= {":IDINDICADOR":idindicador,
                                                 ":DTINICIO":dtinicio,
@@ -37,6 +50,5 @@ async def busca_valores_indicador(idindicador: str, dtinicio:str, dtfim:str):
         cache_ttl=10800 #DEFINE 3H DE ARMAZENAMENTO
     )
 
+    # Processa os resultados da consulta e retorna os dados formatados
     return await process_results(df, return_with_data=True)
-
-    
