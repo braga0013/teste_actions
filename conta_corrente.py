@@ -1,5 +1,13 @@
-# ASANA_PROJECT: Plugin Impressão
+# =============================================================================
+# ARQUIVO: conta_corrente.py
+# OBJETIVO: Define uma rota API para buscar dados de vendas e comissões de indicadores
+#           dentro de um período especificado, incluindo comparação com o mês anterior.
+# O QUE MUDOU: Adicionados comentários técnicos detalhados para melhor entendimento do código.
+# DEPENDENCIAS: FastAPI para criação da API, serviços customizados para execução e processamento de queries,
+#               e módulo de logging para monitoramento da execução.
+# =============================================================================
 
+# ASANA_PROJECT: Plugin Impressão
 
 
 from fastapi import APIRouter
