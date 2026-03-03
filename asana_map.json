@@ -1,4 +1,186 @@
 {
   "workspace_id": "1205335847473242",
-  "default_project_id": "1212678199639342"
+  "default_project_id": "1212678199639342",
+  "projects": [
+    {
+      "gid": "1205548020788096",
+      "name": "Projeto Portal Elevato - Bubble"
+    },
+    {
+      "gid": "1207003435839721",
+      "name": "CISS - Elevato - Manutenção e Novas Implantações"
+    },
+    {
+      "gid": "1209673487557903",
+      "name": "Infraestrutura (Cloud,Local,Redes)"
+    },
+    {
+      "gid": "1210070881323003",
+      "name": "BI e Dados"
+    },
+    {
+      "gid": "1210316498194791",
+      "name": "Projeto notebooklm"
+    },
+    {
+      "gid": "1210532560841460",
+      "name": "Piloto Frente de Caixa"
+    },
+    {
+      "gid": "1210532561904871",
+      "name": "Visita CISS Outubro"
+    },
+    {
+      "gid": "1212239672425288",
+      "name": "Implantação Orçamento/Pedidos - Canoas e Guaíba"
+    },
+    {
+      "gid": "1212254160235314",
+      "name": "Implantação Orçamento/Pedidos - Taquara"
+    },
+    {
+      "gid": "1212254160235415",
+      "name": "Desenvolvimento e Implantação - Motor Crédito"
+    },
+    {
+      "gid": "1212263844617329",
+      "name": "Ganha Ganha - Cadastro e Manutenação das Campanhas"
+    },
+    {
+      "gid": "1212263844617422",
+      "name": "Eventos - Melhorias"
+    },
+    {
+      "gid": "1212263844617592",
+      "name": "Ganha Ganha - Novo Visual"
+    },
+    {
+      "gid": "1212263844617649",
+      "name": "Implantação DDA - Santander"
+    },
+    {
+      "gid": "1212263844617704",
+      "name": "Sistema de Emissão de Etiquetas"
+    },
+    {
+      "gid": "1212263844617781",
+      "name": "Novo BI Vendas"
+    },
+    {
+      "gid": "1212263844617973",
+      "name": "Amostras - Remodelar o Sistema"
+    },
+    {
+      "gid": "1212263844618047",
+      "name": "Fique por Dentro - Mvp e Melhorias"
+    },
+    {
+      "gid": "1212263844618151",
+      "name": "CRM e Painel - MVP 1.0"
+    },
+    {
+      "gid": "1212278993587892",
+      "name": "Pagamento de Freteiros - CD"
+    },
+    {
+      "gid": "1212278993587924",
+      "name": "APP Entregas - Lojas"
+    },
+    {
+      "gid": "1212278993587956",
+      "name": "Club do Pintor"
+    },
+    {
+      "gid": "1212278993587988",
+      "name": "Melhorias DRE"
+    },
+    {
+      "gid": "1212278993588024",
+      "name": "Implantação Active Directory"
+    },
+    {
+      "gid": "1212278993588043",
+      "name": "Implantação IPSec - Oracle"
+    },
+    {
+      "gid": "1212328100263280",
+      "name": "Gestão de Ativos"
+    },
+    {
+      "gid": "1212359181976629",
+      "name": "Melhorias AWS"
+    },
+    {
+      "gid": "1212366745514135",
+      "name": "Novo BI Curtissimo  - Financeiro"
+    },
+    {
+      "gid": "1212366745514183",
+      "name": "Novo BI Compras"
+    },
+    {
+      "gid": "1212366745514230",
+      "name": "Novo BI DRE"
+    },
+    {
+      "gid": "1212366745514278",
+      "name": " Novo BI Fretes"
+    },
+    {
+      "gid": "1212397365731349",
+      "name": "Orçamentos Vendas Direta"
+    },
+    {
+      "gid": "1212573402987442",
+      "name": "Pedidos Efetivados  - Móveis"
+    },
+    {
+      "gid": "1212678199639342",
+      "name": "Plugin Impressão"
+    },
+    {
+      "gid": "1212877729881231",
+      "name": "Sistema Gestão de Serviços"
+    },
+    {
+      "gid": "1213058034851160",
+      "name": "Atualização CISS"
+    },
+    {
+      "gid": "1213104812814439",
+      "name": "Template T.I"
+    },
+    {
+      "gid": "1213105250939650",
+      "name": "Atualização Windows Server 2022"
+    },
+    {
+      "gid": "1213123479235618",
+      "name": "Antivirus Servidores"
+    },
+    {
+      "gid": "1213123480967272",
+      "name": "Cancelamento Serviços Cielo"
+    },
+    {
+      "gid": "1213200841160884",
+      "name": "Ruptura"
+    },
+    {
+      "gid": "1213249412780007",
+      "name": "Documentação dos Rachs"
+    },
+    {
+      "gid": "1213402015231548",
+      "name": "Entregas CD - 2.0"
+    },
+    {
+      "gid": "1213467437380762",
+      "name": "MCP Tool"
+    },
+    {
+      "gid": "1213511861625016",
+      "name": "Teste GithubActions"
+    }
+  ]
 }
