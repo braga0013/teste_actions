@@ -8,11 +8,14 @@ on:
 jobs:
   documentar-asana:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -24,11 +27,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Gerar documentação e enviar ao Asana
+      - name: Atualizar projetos e documentar
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ASANA_TOKEN: ${{ secrets.ASANA_TOKEN }}
         run: python scripts/generate_doc.py
+
+      - name: Commit do asana_map.json atualizado
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add asana_map.json
+          git diff --cached --quiet || git commit -m "chore: atualiza projetos Asana no mapa"
+          git push
 
   comentar-codigo:
     runs-on: ubuntu-latest

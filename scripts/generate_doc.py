@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import unicodedata
 import subprocess
 import requests
 from datetime import datetime
@@ -14,6 +15,13 @@ if not ASANA_TOKEN:
     raise RuntimeError("ASANA_TOKEN não definida")
 
 
+def normalize(text: str) -> str:
+    """Remove acentos, ç e converte para lowercase para comparação."""
+    text = unicodedata.normalize("NFD", text)
+    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
+    return text.lower().strip()
+
+
 def load_project_map() -> dict:
     try:
         with open("asana_map.json", "r", encoding="utf-8") as f:
@@ -23,89 +31,73 @@ def load_project_map() -> dict:
 
 
 def fetch_asana_projects(workspace_id: str) -> list:
-    headers = {
-        "Authorization": f"Bearer {ASANA_TOKEN}",
-        "Content-Type": "application/json",
-    }
-    url = f"https://app.asana.com/api/1.0/workspaces/{workspace_id}/projects"
-    r = requests.get(url, headers=headers, timeout=20)
-
+    """Busca todos os projetos ativos do workspace."""
+    headers = {"Authorization": f"Bearer {ASANA_TOKEN}"}
+    url = (
+        f"https://app.asana.com/api/1.0/workspaces/{workspace_id}/projects"
+        f"?opt_fields=name,notes,archived,current_status_update.status_type"
+    )
+    r = requests.get(url, headers=headers, timeout=30)
     if not r.ok:
         print("ERRO ao buscar projetos:", r.status_code, r.text)
         r.raise_for_status()
 
-    projects = r.json().get("data", [])
-    print(f"Projetos encontrados: {[p['name'] for p in projects]}")
-    return projects
+    all_projects = r.json().get("data", [])
+
+    active = []
+    for p in all_projects:
+        if p.get("archived", False):
+            continue
+        status = p.get("current_status_update") or {}
+        if status.get("status_type") == "complete":
+            continue
+        active.append(p)
+
+    print(f"Projetos ativos: {[p['name'] for p in active]}")
+    return active
 
 
-def gpt_choose_project(file: str, content: str, projects: list) -> str:
-    project_list = "\n".join([
-        f"- ID: {p['gid']} | Nome: {p['name']}"
+def update_asana_map(projects: list):
+    """Atualiza asana_map.json com projetos atuais do workspace."""
+    try:
+        with open("asana_map.json", "r", encoding="utf-8") as f:
+            current = json.load(f)
+    except Exception:
+        current = {}
+
+    current["projects"] = [
+        {"gid": p["gid"], "name": p["name"]}
         for p in projects
-    ])
+    ]
 
-    prompt = f"""
-Você é um engenheiro de software sênior.
-Analise o arquivo abaixo e escolha qual projeto Asana é mais adequado para receber a documentação dele.
+    with open("asana_map.json", "w", encoding="utf-8") as f:
+        json.dump(current, f, ensure_ascii=False, indent=2)
 
-PROJETOS DISPONÍVEIS:
-{project_list}
+    print("asana_map.json atualizado com projetos atuais")
 
-REGRAS:
-- Escolha apenas UM projeto
-- Base sua escolha no nome do arquivo, caminho e conteúdo
-- Responda APENAS com o ID do projeto escolhido, sem mais nada
-- Exemplo de resposta válida: 1202515061506196
 
-Arquivo: {file}
-
-Conteúdo (primeiras 3000 chars):
-{content[:3000]}
-"""
-
-    response = requests.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": "gpt-4.1-mini",
-            "messages": [
-                {"role": "system", "content": "Você escolhe o projeto Asana mais adequado para um arquivo. Responda APENAS com o ID numérico do projeto, sem texto adicional."},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.1,
-        },
-        timeout=30,
-    )
-    response.raise_for_status()
-    chosen_id = response.json()["choices"][0]["message"]["content"].strip()
-
-    valid_ids = [p["gid"] for p in projects]
-    if chosen_id in valid_ids:
-        chosen_name = next(p["name"] for p in projects if p["gid"] == chosen_id)
-        print(f"{file} → GPT escolheu [{chosen_name}] projeto {chosen_id}")
-        return chosen_id
-
-    print(f"GPT retornou ID inválido ({chosen_id}), usando default")
+def find_project_by_name(name: str, projects: list) -> dict | None:
+    """Encontra projeto pelo nome ignorando acentos, ç e capitalização."""
+    name_normalized = normalize(name)
+    for p in projects:
+        if normalize(p["name"]) == name_normalized:
+            return p
     return None
 
 
-def get_project_id_for_file(file: str, content: str, project_map: dict, projects: list) -> str:
-    default = project_map.get("default_project_id")
-
-    if projects:
-        chosen = gpt_choose_project(file, content, projects)
-        if chosen:
-            return chosen
-
-    if not default:
-        raise RuntimeError(f"Nenhum projeto encontrado para {file} e default_project_id não definido")
-
-    print(f"{file} → [Padrão] projeto {default}")
-    return default
+def extract_asana_projects(content: str) -> list:
+    """Extrai todas as linhas # ASANA_PROJECT: do topo do arquivo."""
+    projects = []
+    for line in content.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        match = re.match(r"#\s*ASANA_PROJECT\s*:\s*(.+)", line, re.IGNORECASE)
+        if match:
+            projects.append(match.group(1).strip())
+        elif not line.startswith("#"):
+            break
+    return projects
 
 
 def get_changed_files():
@@ -134,10 +126,9 @@ def get_file_content(file):
         return ""
 
 
-def generate_doc(file, diff):
-    content = get_file_content(file)
+def generate_doc(file, diff, content):
     if not content:
-        return f"{file}\n\nArquivo não encontrado ou vazio.", ""
+        return f"{file}\n\nArquivo não encontrado ou vazio."
 
     prompt = f"""
 Você é um engenheiro de software sênior fazendo code review completo.
@@ -157,7 +148,7 @@ REGRAS DE FORMATAÇÃO (SIGA EXATAMENTE):
 - Listas: cada item começa com "> " (sinal de maior + espaço)
 - Blocos de código: OBRIGATÓRIO usar [CODE] na linha antes e [/CODE] na linha depois
 - Separe seções com uma linha em branco
-- NUNCA escreva entidades HTML como &lt; &gt; &amp; — escreva os caracteres diretamente
+- NUNCA escreva entidades HTML como &lt; &gt; &amp;
 
 QUANDO USAR [CODE]:
 - Exemplos de chamada de função
@@ -252,7 +243,7 @@ DIFF DO COMMIT:
         timeout=60,
     )
     response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"], content
+    return response.json()["choices"][0]["message"]["content"]
 
 
 def xml_escape(text: str) -> str:
@@ -316,31 +307,24 @@ def get_or_create_parent_task(project_id: str) -> str:
         "Authorization": f"Bearer {ASANA_TOKEN}",
         "Content-Type": "application/json",
     }
-
     url = f"https://app.asana.com/api/1.0/projects/{project_id}/tasks"
     r = requests.get(url, headers=headers, timeout=20)
-
     if not r.ok:
         print("ERRO ao buscar tarefas:", r.status_code, r.text)
         r.raise_for_status()
 
     tasks = r.json().get("data", [])
-
     for task in tasks:
         if task.get("name", "").upper() == "DOCUMENTAÇÃO":
             print(f"Tarefa DOCUMENTAÇÃO encontrada: {task['gid']}")
             return task["gid"]
 
     print("Tarefa DOCUMENTAÇÃO não encontrada. Criando...")
-    create_url = "https://app.asana.com/api/1.0/tasks"
-    payload = {
-        "data": {
-            "name": "DOCUMENTAÇÃO",
-            "projects": [project_id],
-        }
-    }
-    r = requests.post(create_url, json=payload, headers=headers, timeout=20)
-
+    payload = {"data": {"name": "DOCUMENTAÇÃO", "projects": [project_id]}}
+    r = requests.post(
+        "https://app.asana.com/api/1.0/tasks",
+        json=payload, headers=headers, timeout=20
+    )
     if not r.ok:
         print("ERRO ao criar tarefa pai:", r.status_code, r.text)
         r.raise_for_status()
@@ -350,55 +334,72 @@ def get_or_create_parent_task(project_id: str) -> str:
     return gid
 
 
-def create_asana_subtask(title, text, project_id: str):
+def create_asana_subtask(title: str, text: str, project_id: str):
     html_notes = text_to_asana_html(text)
     body = f"<body>{html_notes}</body>"
     parent_task_id = get_or_create_parent_task(project_id)
 
     url = f"https://app.asana.com/api/1.0/tasks/{parent_task_id}/subtasks"
-    payload = {
-        "data": {
-            "name": title,
-            "html_notes": body,
-        }
-    }
+    payload = {"data": {"name": title, "html_notes": body}}
     headers = {
         "Authorization": f"Bearer {ASANA_TOKEN}",
         "Content-Type": "application/json",
     }
     r = requests.post(url, json=payload, headers=headers, timeout=20)
-
     if not r.ok:
         print("ERRO ASANA:", r.status_code, r.text)
-
     r.raise_for_status()
 
 
 def main():
+    project_map = load_project_map()
+    workspace_id = project_map.get("workspace_id")
+    default_project_id = project_map.get("default_project_id")
+
+    # Busca projetos ativos e atualiza asana_map.json
+    projects = []
+    if workspace_id:
+        projects = fetch_asana_projects(workspace_id)
+        update_asana_map(projects)
+    else:
+        print("AVISO: workspace_id não definido no asana_map.json")
+
     files = get_changed_files()
+    # Ignora o próprio asana_map.json
+    files = [f for f in files if f != "asana_map.json"]
 
     if not files:
         print("Nenhum arquivo relevante alterado.")
         return
 
-    project_map = load_project_map()
-    workspace_id = project_map.get("workspace_id")
-
-    projects = []
-    if workspace_id:
-        projects = fetch_asana_projects(workspace_id)
-    else:
-        print("AVISO: workspace_id não definido, usando default para todos")
-
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     for file in files:
+        content = get_file_content(file)
+        if not content:
+            print(f"Arquivo vazio ou inacessível: {file}")
+            continue
+
         diff = get_diff_for_file(file)
-        text, content = generate_doc(file, diff)
+        project_names = extract_asana_projects(content)
+
+        if not project_names:
+            print(f"{file} → sem # ASANA_PROJECT, pulando documentação Asana")
+            continue
+
+        # Gera documentação uma vez só
+        print(f"{file} → gerando documentação...")
+        doc_text = generate_doc(file, diff, content)
         title = f"[DOC] {file} – {now}"
-        project_id = get_project_id_for_file(file, content, project_map, projects)
-        create_asana_subtask(title, text, project_id)
-        print(f"Subtarefa criada no Asana para {file}")
+
+        for project_name in project_names:
+            project = find_project_by_name(project_name, projects)
+            if not project:
+                print(f"{file} → projeto '{project_name}' não encontrado, pulando")
+                continue
+            print(f"{file} → enviando para [{project['name']}]")
+            create_asana_subtask(title, doc_text, project["gid"])
+            print(f"Subtarefa criada em [{project['name']}] para {file}")
 
 
 if __name__ == "__main__":
