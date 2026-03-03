@@ -72,7 +72,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase
           git add -A
-          git diff --cached --quiet || git commit -m "docs: comentários automáticos via IA"
+          git diff --cached --quiet && echo "Nenhuma mudança, nada a commitar" && exit 0
+          git commit -m "docs: comentários automáticos via IA"
+          git pull --rebase origin main
           git push
