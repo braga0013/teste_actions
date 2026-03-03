@@ -1,0 +1,21 @@
+{
+  "projects": [
+    {
+      "name": "Plugin Impressão",
+      "asana_project_id": "ID_DO_PROJETO_AQUI",
+      "folders": [
+        "plugin/",
+        "services/",
+        "routes/"
+      ]
+    },
+    {
+      "name": "Scripts e Automações",
+      "asana_project_id": "ID_DO_PROJETO_AQUI",
+      "folders": [
+        "scripts/"
+      ]
+    }
+  ],
+  "default_project_id": "1212678199639342"
+}
