@@ -8,6 +8,7 @@
 
 # ASANA_PROJECT: Template T.I
 
+
 from fastapi import APIRouter
 from services.query_service import execute_query, process_results
 from core.logger import log_execution

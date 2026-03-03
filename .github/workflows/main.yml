@@ -43,6 +43,7 @@ jobs:
 
   comentar-codigo:
     runs-on: ubuntu-latest
+    needs: documentar-asana
     permissions:
       contents: write
     steps:
@@ -71,6 +72,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase
           git add -A
           git diff --cached --quiet || git commit -m "docs: comentários automáticos via IA"
           git push
