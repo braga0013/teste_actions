@@ -19,19 +19,90 @@ def load_project_map() -> dict:
         with open("asana_map.json", "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
-        raise RuntimeError("asana_map.json não encontrado ou inválido — necessário para definir o projeto Asana")
+        raise RuntimeError("asana_map.json não encontrado ou inválido")
 
 
-def get_project_id_for_file(file: str, project_map: dict) -> str:
-    for project in project_map.get("projects", []):
-        for folder in project.get("folders", []):
-            if file.startswith(folder):
-                print(f"{file} → [{project['name']}] projeto {project['asana_project_id']}")
-                return project["asana_project_id"]
+def fetch_asana_projects(workspace_id: str) -> list:
+    headers = {
+        "Authorization": f"Bearer {ASANA_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    url = f"https://app.asana.com/api/1.0/workspaces/{workspace_id}/projects"
+    r = requests.get(url, headers=headers, timeout=20)
 
+    if not r.ok:
+        print("ERRO ao buscar projetos:", r.status_code, r.text)
+        r.raise_for_status()
+
+    projects = r.json().get("data", [])
+    print(f"Projetos encontrados: {[p['name'] for p in projects]}")
+    return projects
+
+
+def gpt_choose_project(file: str, content: str, projects: list) -> str:
+    project_list = "\n".join([
+        f"- ID: {p['gid']} | Nome: {p['name']}"
+        for p in projects
+    ])
+
+    prompt = f"""
+Você é um engenheiro de software sênior.
+Analise o arquivo abaixo e escolha qual projeto Asana é mais adequado para receber a documentação dele.
+
+PROJETOS DISPONÍVEIS:
+{project_list}
+
+REGRAS:
+- Escolha apenas UM projeto
+- Base sua escolha no nome do arquivo, caminho e conteúdo
+- Responda APENAS com o ID do projeto escolhido, sem mais nada
+- Exemplo de resposta válida: 1202515061506196
+
+Arquivo: {file}
+
+Conteúdo (primeiras 3000 chars):
+{content[:3000]}
+"""
+
+    response = requests.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": "gpt-4.1-mini",
+            "messages": [
+                {"role": "system", "content": "Você escolhe o projeto Asana mais adequado para um arquivo. Responda APENAS com o ID numérico do projeto, sem texto adicional."},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.1,
+        },
+        timeout=30,
+    )
+    response.raise_for_status()
+    chosen_id = response.json()["choices"][0]["message"]["content"].strip()
+
+    valid_ids = [p["gid"] for p in projects]
+    if chosen_id in valid_ids:
+        chosen_name = next(p["name"] for p in projects if p["gid"] == chosen_id)
+        print(f"{file} → GPT escolheu [{chosen_name}] projeto {chosen_id}")
+        return chosen_id
+
+    print(f"GPT retornou ID inválido ({chosen_id}), usando default")
+    return None
+
+
+def get_project_id_for_file(file: str, content: str, project_map: dict, projects: list) -> str:
     default = project_map.get("default_project_id")
+
+    if projects:
+        chosen = gpt_choose_project(file, content, projects)
+        if chosen:
+            return chosen
+
     if not default:
-        raise RuntimeError(f"Nenhuma regra encontrada para {file} e default_project_id não definido no asana_map.json")
+        raise RuntimeError(f"Nenhum projeto encontrado para {file} e default_project_id não definido")
 
     print(f"{file} → [Padrão] projeto {default}")
     return default
@@ -66,7 +137,7 @@ def get_file_content(file):
 def generate_doc(file, diff):
     content = get_file_content(file)
     if not content:
-        return f"{file}\n\nArquivo não encontrado ou vazio."
+        return f"{file}\n\nArquivo não encontrado ou vazio.", ""
 
     prompt = f"""
 Você é um engenheiro de software sênior fazendo code review completo.
@@ -181,7 +252,7 @@ DIFF DO COMMIT:
         timeout=60,
     )
     response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+    return response.json()["choices"][0]["message"]["content"], content
 
 
 def xml_escape(text: str) -> str:
@@ -311,13 +382,21 @@ def main():
         return
 
     project_map = load_project_map()
+    workspace_id = project_map.get("workspace_id")
+
+    projects = []
+    if workspace_id:
+        projects = fetch_asana_projects(workspace_id)
+    else:
+        print("AVISO: workspace_id não definido, usando default para todos")
+
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     for file in files:
         diff = get_diff_for_file(file)
-        text = generate_doc(file, diff)
+        text, content = generate_doc(file, diff)
         title = f"[DOC] {file} – {now}"
-        project_id = get_project_id_for_file(file, project_map)
+        project_id = get_project_id_for_file(file, content, project_map, projects)
         create_asana_subtask(title, text, project_id)
         print(f"Subtarefa criada no Asana para {file}")
 
