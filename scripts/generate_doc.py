@@ -1,40 +1,56 @@
 import os
 import re
+import json
 import subprocess
 import requests
 from datetime import datetime
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ASANA_TOKEN = os.getenv("ASANA_TOKEN")
-ASANA_PROJECT_ID = os.getenv("ASANA_PROJECT_ID")
 
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY não definida")
+if not ASANA_TOKEN:
+    raise RuntimeError("ASANA_TOKEN não definida")
 
-if not ASANA_TOKEN or not ASANA_PROJECT_ID:
-    raise RuntimeError("ASANA_TOKEN ou ASANA_PROJECT_ID não definidos")
+
+def load_project_map() -> dict:
+    try:
+        with open("asana_map.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        raise RuntimeError("asana_map.json não encontrado ou inválido — necessário para definir o projeto Asana")
+
+
+def get_project_id_for_file(file: str, project_map: dict) -> str:
+    for project in project_map.get("projects", []):
+        for folder in project.get("folders", []):
+            if file.startswith(folder):
+                print(f"{file} → [{project['name']}] projeto {project['asana_project_id']}")
+                return project["asana_project_id"]
+
+    default = project_map.get("default_project_id")
+    if not default:
+        raise RuntimeError(f"Nenhuma regra encontrada para {file} e default_project_id não definido no asana_map.json")
+
+    print(f"{file} → [Padrão] projeto {default}")
+    return default
 
 
 def get_changed_files():
     try:
         files = subprocess.check_output(
-            ["git", "diff", "HEAD~1", "HEAD", "--name-only"],
-            text=True
-        )
+            ["git", "diff", "HEAD~1", "HEAD", "--name-only"], text=True)
     except Exception:
         files = subprocess.check_output(
-            ["git", "show", "--pretty=", "--name-only", "HEAD"],
-            text=True
-        )
+            ["git", "show", "--pretty=", "--name-only", "HEAD"], text=True)
     return [f for f in files.splitlines() if f and not f.startswith(".github/")]
 
 
 def get_diff_for_file(file):
     try:
         return subprocess.check_output(
-            ["git", "diff", "HEAD~1", "HEAD", "--", file],
-            text=True
-        )
+            ["git", "diff", "HEAD~1", "HEAD", "--", file], text=True)
     except Exception:
         return ""
 
@@ -47,9 +63,8 @@ def get_file_content(file):
         return ""
 
 
-def generate_markdown(file, diff):
+def generate_doc(file, diff):
     content = get_file_content(file)
-
     if not content:
         return f"{file}\n\nArquivo não encontrado ou vazio."
 
@@ -77,20 +92,8 @@ QUANDO USAR [CODE]:
 - Exemplos de chamada de função
 - Trechos de SQL relevantes
 - Exemplos de entrada/saída
-- Qualquer trecho de código que ajude a entender
 
-EXEMPLO DE BLOCO DE CODIGO:
-[CODE]
-SELECT IDPRODUTO, VALPRECO
-FROM DBA.PRODUTO
-WHERE IDPRODUTO = :ID
-[/CODE]
-
-EXEMPLO DE LISTA:
-> item um
-> item dois
-
-ESTRUTURA EXATA A SEGUIR:
+ESTRUTURA EXATA:
 
 ====================
 ARQUIVO
@@ -105,7 +108,7 @@ O QUE MUDOU NESTE COMMIT
 ====================
 OBJETIVO DO CODIGO
 ====================
-Explicação direta do propósito geral do arquivo/funcionalidade.
+Explicação direta do propósito geral.
 
 ====================
 ENTRADA ESPERADA
@@ -182,14 +185,12 @@ DIFF DO COMMIT:
 
 
 def xml_escape(text: str) -> str:
-    # Primeiro desfaz qualquer entidade já escapada para não duplo-escapar
     text = text.replace("&amp;", "&")
     text = text.replace("&lt;", "<")
     text = text.replace("&gt;", ">")
     text = text.replace("&quot;", '"')
     text = text.replace("&#39;", "'")
     text = text.replace("&#96;", "`")
-    # Agora escapa do zero
     text = text.replace("&", "&amp;")
     text = text.replace("<", "&lt;")
     text = text.replace(">", "&gt;")
@@ -205,7 +206,6 @@ def text_to_asana_html(text: str) -> str:
     while i < len(lines):
         line = lines[i]
 
-        # Bloco [CODE]...[/CODE] → <pre>
         if line.strip() == "[CODE]":
             code_lines = []
             i += 1
@@ -216,7 +216,6 @@ def text_to_asana_html(text: str) -> str:
             i += 1
             continue
 
-        # Título com separador ====================
         if line.strip().startswith("===================="):
             if i + 1 < len(lines):
                 title = lines[i + 1].strip()
@@ -225,39 +224,71 @@ def text_to_asana_html(text: str) -> str:
                     i += 3
                     continue
 
-        # Item de lista > item
         if line.startswith("> "):
             content = xml_escape(line[2:].strip())
             html_parts.append(f"<ul><li>{content}</li></ul>")
             i += 1
             continue
 
-        # Linha vazia
         if line.strip() == "":
             i += 1
             continue
 
-        # Parágrafo — usa <ul><li> em vez de <p> para evitar rejeição
         html_parts.append(f"<ul><li>{xml_escape(line)}</li></ul>")
         i += 1
 
     return "\n".join(html_parts)
 
 
-def create_asana_task(title, text):
-    url = "https://app.asana.com/api/1.0/tasks"
+def get_or_create_parent_task(project_id: str) -> str:
+    headers = {
+        "Authorization": f"Bearer {ASANA_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    url = f"https://app.asana.com/api/1.0/projects/{project_id}/tasks"
+    r = requests.get(url, headers=headers, timeout=20)
+
+    if not r.ok:
+        print("ERRO ao buscar tarefas:", r.status_code, r.text)
+        r.raise_for_status()
+
+    tasks = r.json().get("data", [])
+
+    for task in tasks:
+        if task.get("name", "").upper() == "DOCUMENTAÇÃO":
+            print(f"Tarefa DOCUMENTAÇÃO encontrada: {task['gid']}")
+            return task["gid"]
+
+    print("Tarefa DOCUMENTAÇÃO não encontrada. Criando...")
+    create_url = "https://app.asana.com/api/1.0/tasks"
+    payload = {
+        "data": {
+            "name": "DOCUMENTAÇÃO",
+            "projects": [project_id],
+        }
+    }
+    r = requests.post(create_url, json=payload, headers=headers, timeout=20)
+
+    if not r.ok:
+        print("ERRO ao criar tarefa pai:", r.status_code, r.text)
+        r.raise_for_status()
+
+    gid = r.json()["data"]["gid"]
+    print(f"Tarefa DOCUMENTAÇÃO criada: {gid}")
+    return gid
+
+
+def create_asana_subtask(title, text, project_id: str):
     html_notes = text_to_asana_html(text)
     body = f"<body>{html_notes}</body>"
+    parent_task_id = get_or_create_parent_task(project_id)
 
-    print("=== HTML ENVIADO ===")
-    print(body[:3000])
-    print("=== FIM ===")
-
+    url = f"https://app.asana.com/api/1.0/tasks/{parent_task_id}/subtasks"
     payload = {
         "data": {
             "name": title,
             "html_notes": body,
-            "projects": [ASANA_PROJECT_ID],
         }
     }
     headers = {
@@ -279,14 +310,16 @@ def main():
         print("Nenhum arquivo relevante alterado.")
         return
 
+    project_map = load_project_map()
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     for file in files:
         diff = get_diff_for_file(file)
-        text = generate_markdown(file, diff)
+        text = generate_doc(file, diff)
         title = f"[DOC] {file} – {now}"
-        create_asana_task(title, text)
-        print(f"Tarefa criada no Asana para {file}")
+        project_id = get_project_id_for_file(file, project_map)
+        create_asana_subtask(title, text, project_id)
+        print(f"Subtarefa criada no Asana para {file}")
 
 
 if __name__ == "__main__":
