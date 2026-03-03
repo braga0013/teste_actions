@@ -1,12 +1,4 @@
-# =============================================================================
-# ARQUIVO: conta_corrente.py
-# OBJETIVO: Define uma rota API para buscar dados de vendas e comissões de arquitetos
-#           dentro de um período especificado, agrupando por clube para cálculo de pontos.
-# O QUE MUDOU: Adicionada anotação do projeto ASANA no topo do arquivo.
-# DEPENDENCIAS: fastapi, services.query_service (execute_query, process_results), core.logger (log_execution)
-# =============================================================================
-
-# ASANA_PROJECT: Template T.I
+# ASANA_PROJECT: Plugin Impressão
 
 
 from fastapi import APIRouter
